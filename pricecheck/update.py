@@ -4,6 +4,7 @@
     python -m pricecheck.update monitors --no-collect # re-price what we already have
     python -m pricecheck.update monitors --no-gemma   # collect and price, but leave new listings unread (no GPU)
     python -m pricecheck.update monitors --limit 100  # let Gemma read at most 100 listings this run (a quick first try)
+    python -m pricecheck.update monitors --new-prices 30  # also look up new prices for the 30 most common models (SerpApi)
 
 Nothing runs on its own: the data only changes when you run this.
 """
@@ -18,6 +19,7 @@ import sentry_sdk
 
 from . import model, olx, tracing
 from .extract import read_listing
+from .newprice import NewPrices, for_page, model_key
 from .recipe import ROOT, Recipe
 from .store import Store
 
@@ -70,7 +72,7 @@ def write_index():
     (SITE_DATA / "index.json").write_text(json.dumps(recipes), encoding="utf-8")
 
 
-def run(name, collect=True, gemma=True, limit=None):
+def run(name, collect=True, gemma=True, limit=None, new_prices=0):
     recipe, t0 = Recipe(name), time.time()
     store = Store(recipe)
     counts = {"new": 0, "repriced": 0, "removed": 0}
@@ -120,6 +122,23 @@ def run(name, collect=True, gemma=True, limit=None):
 
     items = [to_item(recipe, d, r.to_dict()) for _, r in d[d.removed_on.isna()].iterrows()]
 
+    # New prices: look up the most common models (uses SerpApi searches), then attach whatever is saved.
+    newp = NewPrices(recipe)
+    if new_prices:
+        by_model = {}
+        for it in items:
+            key = model_key(it.get("brand"), it.get("model"))
+            if key and key not in newp.cache:
+                by_model.setdefault(key, []).append(it)
+        top = sorted(by_model.values(), key=len, reverse=True)[:new_prices]
+        log(f"looking up new prices for {len(top)} models ({newp.searches_left()} searches left this month)")
+        for group in top:
+            with tracing.run("new price"), tracing.tool("serpapi_new_price", "Google search for the same model's new price",
+                                                        {"model": group[0].get("model")}) as span:
+                tracing.result(span, newp.lookup(group[0]["brand"], group[0]["model"], used_hint=group[0]["q50"]))
+    for it in items:
+        it["new_price"] = for_page(newp.get(it.get("brand"), it.get("model")))
+
     out = {
         "recipe": page_info(recipe),
         "updated": datetime.now().isoformat(timespec="minutes"),
@@ -139,5 +158,6 @@ if __name__ == "__main__":
         atexit.register(sentry_sdk.flush)  # send the last traces before the command exits
     args = sys.argv[1:]
     limit = int(args[args.index("--limit") + 1]) if "--limit" in args else None
+    new_prices = int(args[args.index("--new-prices") + 1]) if "--new-prices" in args else 0
     run(args[0] if args and not args[0].startswith("--") else "monitors",
-        collect="--no-collect" not in args, gemma="--no-gemma" not in args, limit=limit)
+        collect="--no-collect" not in args, gemma="--no-gemma" not in args, limit=limit, new_prices=new_prices)

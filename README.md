@@ -99,6 +99,15 @@ OLX category page ──► collect (2 s per page, public pages only, no names o
 - **No retraining.** TabPFN reads the current listings every time it predicts, so prices follow the market as you refresh.
 - **Each listing is priced by a model that never saw it** (5-fold), so its own price can't leak into its "usual" range.
 
+## Optional: compare with shop prices (SerpApi)
+
+Add `SERPAPI_KEY=<your key>` to `.env` (free plan at [serpapi.com](https://serpapi.com), 250 searches a month). Then:
+
+- each live check on the local page looks up what Pakistani shops charge for that exact model (one Google search, saved so it's never repeated), and
+- `python -m pricecheck.update monitors --new-prices 30` looks up the 30 most common models for the whole page.
+
+Shop prices are often for imported or refurbished units, and shops disagree, so the page only gives one number when the shops roughly agree (within 60% of each other); otherwise it shows the range and the links. OLX's own listings are left out.
+
 ## Optional: see every check in Sentry
 
 Add `SENTRY_DSN=<your DSN>` to `.env` (create a Python/FastAPI project at [sentry.io](https://sentry.io), free plan) and each price check shows up as an AI agent run:
@@ -108,7 +117,8 @@ invoke_agent pricecheck                ← one "is this price fair?" check
   ├── execute_tool fetch_olx_listing   ← read the OLX page
   ├── chat gemma4:e4b-it-qat           ← Gemma reads the listing: tokens, retries, cut-off answers
   ├── execute_tool tabpfn_price_range  ← TabPFN predicts the usual range
-  └── execute_tool bargain_advice      ← code turns it into what to offer
+  ├── execute_tool bargain_advice      ← code turns it into what to offer
+  └── execute_tool serpapi_new_price   ← what shops charge for the same model
 ```
 
 That's how we found that a cold Gemma (not yet loaded into the GPU) takes ~2 minutes on the first check, versus ~5 seconds once it's warm. Only public listing text is sent; no IPs or personal data.

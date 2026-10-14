@@ -171,6 +171,7 @@ function sheet(l) {
       <div><small>Most you should pay</small><b>${rs(a.max_pay)}</b></div>
     </div>
     ${dropped}
+    ${newPrice(l)}
     <h4>What the listing says (read by Gemma)</h4>
     <p class="read">${read || "Not much: the seller didn't list specs."}${data.recipe.inspect ? " Check in person: " + data.recipe.inspect + "." : ""}</p>
     ${sims.length ? `<h4>Similar listings</h4><div class="minis">${sims.map((s) => `
@@ -178,6 +179,21 @@ function sheet(l) {
       <div><b>${rs(s.price)}</b><br>${escapeHtml(s.title).slice(0, 48)}<br><span class="meta">${s.city || ""}</span></div></div>`).join("")}</div>` : ""}
     <div class="btns"><a class="btn solid" href="${l.url}" target="_blank" rel="noopener">View on OLX</a></div>`;
   $("sheet").hidden = false;
+}
+
+// What Pakistani shops charge for the same model (from a Google search). Shop prices are often for
+// imported or refurbished units, and shops disagree, so we only give one number when they roughly agree.
+function newPrice(l) {
+  const n = l.new_price;
+  if (!n) return "";
+  const links = n.sources.map((s) => `<a href="${s.link}" target="_blank" rel="noopener">${escapeHtml(s.site)} ${k(s.price)}</a>`).join(" · ");
+  const head = `<h4>Shop price for this model</h4>`;
+  if (!n.confident) return `${head}<p class="read">Shops list it between ${rs(n.low)}${n.high !== n.low ? " and " + rs(n.high) : ""}, too far apart to compare. ${links}</p>`;
+  const save = Math.round((1 - l.price / n.price) * 100);
+  const say = save >= 20 ? `This listing is <b>${save}% cheaper</b> than buying from a shop.`
+    : save > 0 ? `Only <b>${save}%</b> cheaper than a shop. A shop's checking warranty may be worth the difference.`
+    : `<b>It costs more than a shop</b> (${-save}% more). Ask the shop first.`;
+  return `${head}<p class="read">Shops sell this model for about <b>${rs(n.price)}</b> (often imported or refurbished). ${say} ${links}</p>`;
 }
 
 async function check(e) {

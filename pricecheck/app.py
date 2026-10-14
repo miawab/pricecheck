@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import model, olx, tracing
 from .extract import read_listing
+from .newprice import NewPrices, for_page
 from .recipe import ROOT, Recipe
 from .store import Store
 from .update import to_item
@@ -65,6 +66,11 @@ def _check(url, r):
                       {"price": row["price"], "q25": round(row["q25"]), "q75": round(row["q75"])}) as span:
         item = to_item(r, d, row)
         tracing.result(span, item["advice"])
+    with tracing.tool("serpapi_new_price", "Google search for the same model's new price",
+                      {"brand": item.get("brand"), "model": item.get("model")}) as span:
+        found = NewPrices(r).lookup(item.get("brand"), item.get("model"), used_hint=item["q50"])
+        item["new_price"] = for_page(found)
+        tracing.result(span, item["new_price"])
     return item
 
 

@@ -54,6 +54,9 @@ def main():
            "Sign up free at https://ux.priorlabs.ai, accept the license on the Licenses tab, copy your API key "
            "from the Account page, and add a line TABPFN_TOKEN=<your key> to .env")
 
+    for key, what in [("SERPAPI_KEY", "shop price comparison"), ("SENTRY_DSN", "Sentry agent tracing")]:
+        print(INFO + f"{what}: " + ("on" if os.environ.get(key) else f"off (optional: add {key} to .env)"))
+
     recipes = sorted(p.stem for p in (ROOT / "recipes").glob("*.toml") if not p.stem.endswith(".draft"))
     report(bool(recipes), f"Recipes: {', '.join(recipes) or 'none'}",
            'Make one: python -m pricecheck.new_recipe phones "https://www.olx.com.pk/mobile-phones_c1453"')
