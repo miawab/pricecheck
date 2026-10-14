@@ -7,14 +7,16 @@
 
 Nothing runs on its own: the data only changes when you run this.
 """
+import atexit
 import json
 import sys
 import time
 from datetime import datetime
 
 import numpy as np
+import sentry_sdk
 
-from . import model, olx
+from . import model, olx, tracing
 from .extract import read_listing
 from .recipe import ROOT, Recipe
 from .store import Store
@@ -100,7 +102,8 @@ def run(name, collect=True, gemma=True, limit=None):
         todo = todo[:limit]
     log(f"Gemma reading {len(todo)} listings" if gemma else f"skipping Gemma ({len(store.needing_specs())} listings wait to be read)")
     for i, l in enumerate(todo, 1):
-        spec = read_listing(recipe, l)
+        with tracing.run("read listing"), tracing.agent(f"Read OLX listing {l['id']}: {l['title']}"):
+            spec = read_listing(recipe, l)
         if spec:
             store.add_spec(spec)
         if i % 25 == 0:
@@ -108,8 +111,12 @@ def run(name, collect=True, gemma=True, limit=None):
 
     d = model.frame(recipe, store)
     log(f"TabPFN pricing {len(d)} listings")
-    d = model.price_all(recipe, d)
-    acc = model.accuracy(d)
+    with tracing.run("price all listings"), tracing.tool(
+            "tabpfn_price_range", "TabPFN prices every listing from the others (5-fold)",
+            {"listings": len(d), "recipe": recipe.name}) as span:
+        d = model.price_all(recipe, d)
+        acc = model.accuracy(d)
+        tracing.result(span, acc)
 
     items = [to_item(recipe, d, r.to_dict()) for _, r in d[d.removed_on.isna()].iterrows()]
 
@@ -128,6 +135,8 @@ def run(name, collect=True, gemma=True, limit=None):
 
 
 if __name__ == "__main__":
+    if tracing.init():
+        atexit.register(sentry_sdk.flush)  # send the last traces before the command exits
     args = sys.argv[1:]
     limit = int(args[args.index("--limit") + 1]) if "--limit" in args else None
     run(args[0] if args and not args[0].startswith("--") else "monitors",

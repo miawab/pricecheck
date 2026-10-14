@@ -99,6 +99,20 @@ OLX category page ──► collect (2 s per page, public pages only, no names o
 - **No retraining.** TabPFN reads the current listings every time it predicts, so prices follow the market as you refresh.
 - **Each listing is priced by a model that never saw it** (5-fold), so its own price can't leak into its "usual" range.
 
+## Optional: see every check in Sentry
+
+Add `SENTRY_DSN=<your DSN>` to `.env` (create a Python/FastAPI project at [sentry.io](https://sentry.io), free plan) and each price check shows up as an AI agent run:
+
+```
+invoke_agent pricecheck                ← one "is this price fair?" check
+  ├── execute_tool fetch_olx_listing   ← read the OLX page
+  ├── chat gemma4:e4b-it-qat           ← Gemma reads the listing: tokens, retries, cut-off answers
+  ├── execute_tool tabpfn_price_range  ← TabPFN predicts the usual range
+  └── execute_tool bargain_advice      ← code turns it into what to offer
+```
+
+That's how we found that a cold Gemma (not yet loaded into the GPU) takes ~2 minutes on the first check, versus ~5 seconds once it's warm. Only public listing text is sent; no IPs or personal data.
+
 ## What it can't do
 
 - It only sees **asking prices**, never what people actually paid. Removed listings are an estimate of sold prices, not proof.
