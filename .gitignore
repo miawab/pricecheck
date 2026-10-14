@@ -1,7 +1,7 @@
-node_modules/
 .venv/
 __pycache__/
 .env
 *.log
-# real screenshots from friends stay out of git
-data/real/
+# collected listings stay on your PC; only the page data in site/data is shareable
+/data/
+recipes/*.draft.toml

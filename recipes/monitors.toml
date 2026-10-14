@@ -1,0 +1,84 @@
+# A recipe tells pricecheck what to collect and what Gemma should read out of each listing.
+# Adding a category (phones, laptops, bikes...) = copying this file and changing the fields.
+
+name = "monitors"
+title = "Monitors"
+item = "computer monitor"
+# The OLX page to collect from: copy it from your browser (a category, or a category with one filter).
+olx_search = "https://www.olx.com.pk/computer-components_c708205?filter=type_eq_monitors"
+
+# What a buyer should check in person (shown on each listing).
+inspect = "dead pixels, lines, backlight bleed, all ports working, and that the model on the back matches the listing"
+
+# Sidebar filters on the page, in order.
+filters = ["size_inch", "panel", "resolution"]
+
+# Hints Gemma gets on top of the generic instructions.
+hints = """
+- You may infer size or panel from a model number only if you are sure (e.g. Dell P2719H is 27" IPS 1080p).
+- "2K" or "QHD" means 1440p. "FHD" means 1080p. "UHD" means 4k.
+"""
+
+# Listings missing these can't be compared fairly, so they aren't priced.
+required = ["size_inch"]
+# Prices are compared within groups of this field when spotting typos and wrong-category listings.
+group_by = "size_inch"
+
+# Fields that decide which listings count as "similar" (numbers match within `tolerance`).
+similar_on = ["size_inch", "panel", "resolution"]
+tolerance = { size_inch = 1.0 }
+
+# Brands the UI's "reputable brands only" filter keeps.
+reputable = ["dell", "hp", "samsung", "lg", "lenovo", "asus", "acer", "msi", "benq", "aoc", "viewsonic", "philips", "gigabyte", "apple", "xiaomi"]
+
+# key = short name Gemma writes (shorter answers are faster), name = column name.
+[[fields]]
+key = "b"
+name = "brand"
+type = "string"
+describe = "lowercase brand actually named in the text (dell, hp, samsung, lg, lenovo, asus, acer, msi, benq, aoc, viewsonic, philips, gigabyte, apple, xiaomi, koorui...), 'unknown' if not stated"
+
+[[fields]]
+key = "m"
+name = "model"
+type = "string"
+describe = "model number if stated, else ''"
+
+[[fields]]
+key = "s"
+name = "size_inch"
+label = "Size"
+unit = '"'
+type = "number"
+describe = "screen size in inches, or null"
+
+[[fields]]
+key = "p"
+name = "panel"
+label = "Panel"
+type = "enum"
+values = ["ips", "va", "tn", "oled", "unknown"]
+describe = "panel type"
+
+[[fields]]
+key = "r"
+name = "resolution"
+label = "Resolution"
+type = "enum"
+values = ["720p", "1080p", "1440p", "4k", "ultrawide", "other", "unknown"]
+describe = "resolution"
+
+[[fields]]
+key = "hz"
+name = "refresh_hz"
+label = "Refresh rate"
+unit = "Hz"
+type = "integer"
+describe = "refresh rate in Hz, or null"
+
+[[fields]]
+key = "cv"
+name = "curved"
+label = "curved"
+type = "boolean"
+describe = "curved screen"

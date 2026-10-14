@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pricecheck · Is this OLX price fair?</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-row">
+      <a class="logo" href="./">price<span>check</span></a>
+      <span class="tagline">Is this OLX price fair? Know before you bargain.</span>
+      <select id="recipe-pick" class="recipe-pick" title="Category" hidden></select>
+    </div>
+  </header>
+
+  <section class="searchbar">
+    <form class="wrap search-row" id="check-form">
+      <input id="check-url" type="url" placeholder="Paste an OLX link, e.g. https://www.olx.com.pk/item/...-iid-1120146181" autocomplete="off">
+      <button type="submit">Check price</button>
+    </form>
+    <p class="wrap check-msg" id="check-msg" hidden></p>
+  </section>
+
+  <main class="wrap layout">
+    <aside class="filters" id="filters">
+      <div class="box">
+        <h3>Your budget</h3>
+        <label class="field">Max price (Rs)
+          <input type="number" id="f-budget" placeholder="e.g. 35000" step="500" min="0">
+        </label>
+        <label class="check"><input type="checkbox" id="f-bargain"> Include ones I could bargain down to it</label>
+      </div>
+      <div id="recipe-filters"></div>
+      <div class="box">
+        <h3>Location</h3>
+        <select id="f-city"><option value="">All of Pakistan</option></select>
+      </div>
+      <div class="box">
+        <h3>Show</h3>
+        <label class="check" id="reputable-row"><input type="checkbox" id="f-reputable"> Reputable brands only</label>
+        <label class="check"><input type="checkbox" id="f-nofault" checked> Hide ones with admitted faults</label>
+        <label class="check"><input type="checkbox" id="f-good"> Good deals only</label>
+      </div>
+    </aside>
+
+    <section class="results">
+      <div class="results-head">
+        <h1 id="results-title">Monitors in Pakistan</h1>
+        <label class="sort">Sort by:
+          <select id="sort">
+            <option value="deal">Best deal first</option>
+            <option value="price">Price: low to high</option>
+            <option value="new">Newest</option>
+          </select>
+        </label>
+      </div>
+      <div id="list"></div>
+      <button id="more" class="more" hidden>Show more</button>
+    </section>
+  </main>
+
+  <footer class="wrap footer" id="footer"></footer>
+
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true">
+      <button class="sheet-close" id="sheet-close" aria-label="Close">×</button>
+      <div id="sheet-body"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
