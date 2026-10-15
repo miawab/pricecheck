@@ -81,6 +81,19 @@ def _listing(hit):
     }
 
 
+def _search_results(state):
+    """(listings, page count) from a search page's data. OLX has served two layouts:
+    `algolia.content.hits` / `nbPages`, and (newer) `listingSearch.page.items` / `totalPages`.
+    Raises KeyError/TypeError when the page matches neither."""
+    if "algolia" in state:
+        content = state["algolia"]["content"]
+        return content["hits"], content.get("nbPages")
+    if "listingSearch" in state:
+        page = state["listingSearch"]["page"]
+        return page["items"], page.get("totalPages")
+    raise KeyError("algolia or listingSearch")
+
+
 def search(path, log=print):
     """Every listing in a search/category, e.g. 'computer-components_c708205?filter=type_eq_monitors'."""
     path = re.sub(r"^https?://(www\.)?olx\.com\.pk/", "", path.strip())
@@ -90,8 +103,8 @@ def search(path, log=print):
         url = f"https://www.olx.com.pk/{path}" + (f"{sep}page={page}" if page > 1 else "")
         state, html = _page(url)
         try:
-            content = state["algolia"]["content"]
-            new = [h for h in content["hits"] if str(h["externalID"]) not in seen]
+            hits, page_count = _search_results(state)
+            new = [h for h in hits if str(h["externalID"]) not in seen]
             rows = [_listing(h) for h in new]
         except (KeyError, TypeError) as e:
             raise LayoutChanged(url, html, f"search results not where expected (missing {e})") from e
@@ -100,8 +113,8 @@ def search(path, log=print):
         for h, row in zip(new, rows):
             seen.add(str(h["externalID"]))
             out.append(row)
-        log(f"  page {page}/{content.get('nbPages')}: {len(out)} listings")
-        if page >= (content.get("nbPages") or 0):
+        log(f"  page {page}/{page_count}: {len(out)} listings")
+        if page >= (page_count or 0):
             break
         page += 1
         time.sleep(DELAY)

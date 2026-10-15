@@ -78,3 +78,41 @@ def test_item_url_never_contains_phone():
     url = olx.item_url(123, "LG 27 IPS 0300 1234567")
     assert url == "https://www.olx.com.pk/item/lg-27-ips-iid-123"
     assert olx.listing_id(url) == "123"
+
+
+@pytest.fixture
+def fake_olx_listing_search(monkeypatch):
+    """Serve the newer layout (`state.listingSearch.page.items`) for every search page, as fake_olx does for the old one."""
+    requested = []
+
+    def get(url, **_):
+        requested.append(url)
+        return Page((FIXTURES / "search_listingsearch.html").read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(olx.requests, "get", get)
+    monkeypatch.setattr(olx, "DELAY", 0)
+    return requested
+
+
+def test_search_reads_listing_search_layout(fake_olx_listing_search):
+    rows = olx.search("https://www.olx.com.pk/computer-components_c708205?filter=type_eq_monitors", log=lambda *_: None)
+    assert len(rows) == 6
+    assert len({r["id"] for r in rows}) == 6
+    for r in rows:
+        assert r["id"].isdigit()
+        assert r["url"].startswith("https://www.olx.com.pk/item/") and r["url"].endswith(f"-iid-{r['id']}")
+        assert r["title"]
+        assert isinstance(r["price"], (int, float)) and r["price"] > 0  # top-level price is 0; real one is in extraFields
+        assert r["city"]
+    first = rows[0]
+    assert first["id"] == "1120313885" and first["price"] == 65000
+    assert first["city"] == "Lahore" and first["area"] == "Gulberg"
+    assert first["brand_dropdown"] == "samsung" and first["condition_dropdown"] == "used"
+    assert first["featured"] is True
+
+
+def test_search_matching_neither_layout_raises_layout_changed(monkeypatch):
+    html = '<script>window.state = {"somethingNew": {}};</script>'
+    monkeypatch.setattr(olx.requests, "get", lambda url, **_: Page(html))
+    with pytest.raises(olx.LayoutChanged):
+        olx.search("computer-components_c708205", log=lambda *_: None)
