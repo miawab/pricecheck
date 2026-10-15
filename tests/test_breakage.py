@@ -24,19 +24,25 @@ def redesigned_search_page():
     return change_layout((FIXTURES / "search_p1.html").read_text(encoding="utf-8"))
 
 
+def unreadable_search_page():
+    """A redesign pricecheck cannot read: the `listingSearch` layout is supported now (the rehearsal's
+    change_layout produces it), so move the listings somewhere neither known layout has them."""
+    return redesigned_search_page().replace('"listingSearch"', '"searchResults"')
+
+
 def test_redesigned_search_page_raises_layout_changed(monkeypatch):
-    serve(monkeypatch, redesigned_search_page())
+    serve(monkeypatch, unreadable_search_page())
     with pytest.raises(olx.LayoutChanged, match="search results not where expected") as caught:
         olx.search("computer-components_c708205?filter=type_eq_monitors", log=lambda *_: None)
-    assert "listingSearch" in caught.value.html
+    assert "searchResults" in caught.value.html
 
 
 def test_report_points_at_where_listings_moved(monkeypatch):
-    serve(monkeypatch, redesigned_search_page())
+    serve(monkeypatch, unreadable_search_page())
     with pytest.raises(olx.LayoutChanged) as caught:
         olx.search("computer-components_c708205", log=lambda *_: None)
     info = breakage.describe(caught.value, "test")
-    assert "window.state.listingSearch.page.items[]" in info["body"]
+    assert "window.state.searchResults.page.items[]" in info["body"]
     assert "search page" in info["title"]
 
 
