@@ -10,7 +10,6 @@ import pandas as pd
 from sklearn.model_selection import KFold
 
 from . import recipe as _settings  # noqa: F401  (loads .env, which has TABPFN_TOKEN)
-from tabpfn import TabPFNRegressor  # noqa: E402
 
 WINDOW_DAYS = 120  # listings older than this describe a different market; keep them archived, don't price from them
 TWIN_CITIES = {"Islamabad", "Rawalpindi"}
@@ -71,6 +70,8 @@ def features(recipe, d):
 
 
 def _fit_predict(X_train, y_train, X_test):
+    from tabpfn import TabPFNRegressor  # imported here so the rest (advice, similar, tests) works without torch
+
     model = TabPFNRegressor(device="cpu", random_state=0).fit(X_train, y_train)
     q = model.predict(X_test, output_type="quantiles", quantiles=[0.25, 0.5, 0.75])
     return np.exp(np.array(q).T)  # rows: q25, q50, q75 in rupees

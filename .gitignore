@@ -5,3 +5,6 @@ __pycache__/
 # collected listings stay on your PC; only the page data in site/data is shareable
 /data/
 recipes/*.draft.toml
+.pytest_cache/
+report.xml
+.cache/

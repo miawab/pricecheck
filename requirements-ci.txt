@@ -1,0 +1,6 @@
+# What the pipeline needs to test the code. No Gemma, Ollama or TabPFN: tests use saved pages and plain code.
+pandas>=2.2
+scikit-learn>=1.5
+requests>=2.32
+sentry-sdk>=2.40
+pytest>=8

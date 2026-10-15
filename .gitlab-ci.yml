@@ -1,0 +1,49 @@
+# pricecheck pipeline: test the OLX reader and pricing code, scan for leaks, deploy the site.
+# Nothing here runs on a timer. Pipelines start from a push or a merge request.
+#
+# CI/CD variables (Settings > CI/CD > Variables, masked):
+#   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID   deploy site/ to Vercel
+
+stages:
+  - test
+  - secure
+  - deploy
+
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+tests:
+  stage: test
+  image: python:3.12-slim
+  cache:
+    key: pip-$CI_COMMIT_REF_SLUG
+    paths: [.cache/pip]
+  script:
+    - pip install -q -r requirements-ci.txt
+    - python -m pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+sast:
+  stage: secure
+
+secret_detection:
+  stage: secure
+
+deploy_site:
+  stage: deploy
+  image: node:22-slim
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $VERCEL_TOKEN
+  environment:
+    name: production
+    url: https://pricecheck-gamma.vercel.app
+  script:
+    - cd site
+    - npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
