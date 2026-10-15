@@ -17,7 +17,7 @@ from datetime import datetime
 import numpy as np
 import sentry_sdk
 
-from . import model, olx, tracing
+from . import breakage, model, olx, tracing
 from .extract import read_listing
 from .newprice import NewPrices, for_page, model_key
 from .recipe import ROOT, Recipe
@@ -79,7 +79,13 @@ def run(name, collect=True, gemma=True, limit=None, new_prices=0):
 
     if collect:
         log(f"collecting OLX {recipe.title.lower()}")
-        new, repriced, removed = store.merge(olx.search(recipe.olx_search, log=log))
+        try:
+            found = olx.search(recipe.olx_search, log=log)
+        except olx.LayoutChanged as e:
+            breakage.report(e, f"python -m pricecheck.update {name}", log=log)
+            log("stopped: nothing was changed. Once the fix is merged, `git pull` and run this again.")
+            sys.exit(1)
+        new, repriced, removed = store.merge(found)
         counts.update(new=new, repriced=repriced, removed=removed)
         store.save()
         log(f"{new} new, {repriced} changed price, {removed} gone since last run")
@@ -89,6 +95,11 @@ def run(name, collect=True, gemma=True, limit=None, new_prices=0):
         for i, l in enumerate(todo, 1):
             try:
                 d = olx.details(l["url"])
+            except olx.LayoutChanged as e:  # every listing page will fail the same way: report once and stop
+                breakage.report(e, f"python -m pricecheck.update {name}", log=log)
+                store.save()
+                log("stopped fetching descriptions. Once the fix is merged, `git pull` and run this again.")
+                sys.exit(1)
             except Exception as e:  # one bad page shouldn't stop the run
                 log(f"  {l['id']}: {e}")
                 d = None

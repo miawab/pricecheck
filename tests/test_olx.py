@@ -60,7 +60,7 @@ def test_details_reads_description_and_price(fake_olx):
 
 def test_page_without_data_fails_loudly(monkeypatch):
     monkeypatch.setattr(olx.requests, "get", lambda url, **_: Page("<html>new layout</html>"))
-    with pytest.raises(ValueError, match="no page data"):
+    with pytest.raises(olx.LayoutChanged, match="no `window.state` page data"):
         olx.details("https://www.olx.com.pk/item/x-iid-1")
 
 

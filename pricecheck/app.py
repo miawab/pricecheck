@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from . import model, olx, tracing
+from . import breakage, model, olx, tracing
 from .extract import read_listing
 from .newprice import NewPrices, for_page
 from .recipe import ROOT, Recipe
@@ -35,7 +35,12 @@ def _check(url, r):
         raise HTTPException(400, "Not an OLX listing link")
     store = Store(r)
     with tracing.tool("fetch_olx_listing", "Read the public OLX listing page", {"url": url}) as span:
-        listing = olx.details(url)
+        try:
+            listing = olx.details(url)
+        except olx.LayoutChanged as e:
+            issue = breakage.report(e, "live price check")
+            raise HTTPException(503, "OLX changed its page, so pricecheck can't read it right now. "
+                                     + (f"It has been reported and is being fixed: {issue}" if issue else "It has been logged."))
         tracing.result(span, {"found": listing is not None, "price": (listing or {}).get("price")})
     if listing is None:
         raise HTTPException(404, "OLX didn't return that listing (removed?)")

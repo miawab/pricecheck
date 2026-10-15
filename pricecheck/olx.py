@@ -5,6 +5,7 @@ Polite by design: one page every 2 seconds, only public search and listing pages
 OLX serves at most ~50 pages per search, so recipes should point at a narrow category.
 """
 import json
+import os
 import re
 import time
 
@@ -14,13 +15,34 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 DELAY = 2.0
 
 
-def _state(url):
+class LayoutChanged(ValueError):
+    """OLX served a page we can't read any more. Carries the page so breakage.py can report what changed."""
+
+    def __init__(self, url, html, reason):
+        super().__init__(f"OLX page layout changed at {url}: {reason}")
+        self.url, self.html, self.reason = url, html, reason
+
+
+def _fetch(url):
     html = requests.get(url, headers=HEADERS, timeout=30).text
+    if os.environ.get("PRICECHECK_REHEARSE_OLX_CHANGE"):
+        from .rehearsal import change_layout  # demo only: pretend OLX shipped a redesign
+        html = change_layout(html)
+    return html
+
+
+def _page(url):
+    """The page's data (OLX puts it in a `window.state = {...}` script) and the raw HTML."""
+    html = _fetch(url)
     start = html.find("window.state = ")
     if start < 0:
-        raise ValueError(f"no page data at {url}")
+        raise LayoutChanged(url, html, "no `window.state` page data")
     state, _ = json.JSONDecoder().raw_decode(html, start + len("window.state = "))
-    return state
+    return state, html
+
+
+def _state(url):
+    return _page(url)[0]
 
 
 PHONE = re.compile(r"(\+?92|0)[\s-]?3\d{2}[\s-]?\d{7}|\b\d{4}[\s-]?\d{7}\b")
@@ -65,13 +87,19 @@ def search(path, log=print):
     seen, out, page = set(), [], 1
     while True:
         sep = "&" if "?" in path else "?"
-        content = _state(f"https://www.olx.com.pk/{path}" + (f"{sep}page={page}" if page > 1 else ""))["algolia"]["content"]
-        new = [h for h in content.get("hits", []) if str(h["externalID"]) not in seen]
+        url = f"https://www.olx.com.pk/{path}" + (f"{sep}page={page}" if page > 1 else "")
+        state, html = _page(url)
+        try:
+            content = state["algolia"]["content"]
+            new = [h for h in content["hits"] if str(h["externalID"]) not in seen]
+            rows = [_listing(h) for h in new]
+        except (KeyError, TypeError) as e:
+            raise LayoutChanged(url, html, f"search results not where expected (missing {e})") from e
         if not new:
             break
-        for h in new:
+        for h, row in zip(new, rows):
             seen.add(str(h["externalID"]))
-            out.append(_listing(h))
+            out.append(row)
         log(f"  page {page}/{content.get('nbPages')}: {len(out)} listings")
         if page >= (content.get("nbPages") or 0):
             break
@@ -87,11 +115,16 @@ def listing_id(url):
 
 def details(url):
     """One listing page: the listing itself plus its description."""
-    state = _state(url)
+    state, html = _page(url)
+    if "ad" not in state:
+        raise LayoutChanged(url, html, "listing data not where expected (missing 'ad')")
     ad = (state.get("ad") or {}).get("data") or state.get("ad") or {}
     if not ad.get("externalID"):
-        return None
-    row = _listing(ad)
+        return None  # removed or sold
+    try:
+        row = _listing(ad)
+    except (KeyError, TypeError) as e:
+        raise LayoutChanged(url, html, f"listing fields changed (missing {e})") from e
     row["description"] = no_phones(ad.get("description"))
     row["active"] = ad.get("state") == "active"
     return row
