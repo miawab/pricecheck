@@ -20,9 +20,6 @@ components:
       - from: "context:project_id"
         as: "project_id"
         optional: true
-      - from: "context:inputs.agent_platform_standard_context.primary_branch"
-        as: "primary_branch"
-        optional: true
       - from: "context:current_date"
         as: "today"
     toolset:
@@ -35,10 +32,7 @@ components:
       - "mkdir"
       - "todo_write"
       - "run_command"
-    max_cycles: 150
-    identical_tool_call_limit: 3
     ui_log_events:
-      - "on_agent_reasoning"
       - "on_tool_execution_success"
       - "on_tool_execution_failed"
       - "on_agent_final_answer"
@@ -49,23 +43,6 @@ routers:
 
 flow:
   entry_point: "scraper_medic"
-  inputs:
-    - category: agent_platform_standard_context
-      version_constraint: "^1.0.0"
-      input_schema:
-        workload_branch:
-          type: string
-          description: The workload branch for the GitLab Merge Request
-        primary_branch:
-          type: string
-          description: Merge Request target branch
-        session_owner_id:
-          type: string
-          description: Human user's ID that initiated the flow
-        service_account_name:
-          type: string
-          description: Name of the service account that runs the flow
-          optional: true
 
 prompts:
   - name: "scraper_medic_prompt"
@@ -118,5 +95,5 @@ prompts:
 
         Be honest in every comment: report only what you actually did and saw.
       user: |
-        Today is {{ today }}. Primary branch: {{ primary_branch }}.
+        Today is {{ today }}. Find the primary (default) branch with `glab repo view --output json`.
         {{ goal }}
