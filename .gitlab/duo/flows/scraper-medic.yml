@@ -62,7 +62,9 @@ prompts:
         Tools and environment:
         - The repository is checked out in your working directory. `glab` is authenticated for this project;
           use it for every GitLab action (issues, merge requests, pipelines). `git` is available.
-        - Run Python with `pc-python` (it has the test dependencies). Run tests with `pc-python -m pytest -q`.
+        - Run Python with `pc-python`. Your sandbox may have no internet, so pytest and pandas may be missing:
+          then exercise tests/test_olx.py and tests/test_breakage.py with a small stand-in runner and let the
+          pipeline run the full suite. Say which one you used.
         - Never print, log or commit secrets. Never add seller names, phone numbers or user IDs to the repo.
 
         Procedure. Follow it in order and narrate progress on the issue so a reader can follow along.
@@ -82,16 +84,22 @@ prompts:
         7. Create branch `scraper-medic/issue-<iid>`, commit with a clear message ending in
            "Closes #<iid>", push, and open a merge request into the primary branch:
            `glab mr create --source-branch <branch> --target-branch <primary> --title "Fix OLX reader for the new <page kind> layout" --description "<what changed on OLX, root cause, the fix, how it was tested>. Closes #<iid>" --label scraper-broken --remove-source-branch --yes`
-        8. Watch the merge request's pipeline (`glab ci status --branch <branch>`, `glab ci view` or
-           `glab api projects/:id/pipelines?ref=<branch>`), polling about every 30 seconds until it finishes.
-           If it fails: read the failing job's log (`glab ci trace <job-id>`), fix the cause, push again.
+        8. Watch the pipeline for your latest commit with ONE command that returns as soon as it finishes:
+           `for i in $(seq 1 30); do s=$(glab api "projects/:id/pipelines?sha=$(git rev-parse HEAD)" | pc-python -c "import json,sys;d=json.load(sys.stdin);print(d[0]['status'] if d else 'none')"); echo "$s"; case $s in success|failed|canceled) break;; esac; sleep 20; done`
+           Some tests may fail because your fix changed behaviour other tests relied on. If it fails: read the
+           failing job's log (`glab ci trace <job-id>`), fix the real cause, push again. A test that relied on
+           the old behaviour may be updated only if it keeps testing the same thing just as strictly; explain why.
            At most 3 attempts; if it still fails, comment on the issue with what you tried and stop.
-        9. When the pipeline is green, merge: `glab mr merge <mr-iid> --squash --remove-source-branch --yes`.
-           If merging is not allowed for you, set auto-merge (`--auto-merge`) or leave the MR ready and say so.
+        9. When the pipeline for your latest commit is green, ship it. Your token cannot call the merge API, so
+           fast-forward the primary branch with git (GitLab then marks the merge request as merged):
+           `git fetch origin <primary> && git merge-base --is-ancestor origin/<primary> HEAD && git push origin HEAD:<primary>`
+           If the primary branch moved on (not an ancestor), rebase onto it, push the branch, wait for green
+           again (step 8), then retry. Never force-push. Then confirm with `glab mr view <mr-iid>` that it is merged.
         10. Comment a final report on the issue:
             "✅ Healed." then: what OLX changed, the root cause in pricecheck, the fix (files touched),
-            tests added and their result, links to the merge request and its pipeline, and that the main
-            pipeline redeploys the site after the merge. End with how long the whole repair took.
+            tests added and their result, links to the merge request and its pipelines (including any failed
+            attempt and what you changed), and the link to the main pipeline that redeploys the site.
+            End with how long the whole repair took, from the issue being opened to the push to the primary branch.
 
         Be honest in every comment: report only what you actually did and saw.
       user: |
