@@ -203,7 +203,7 @@ async function check(e) {
   msg.hidden = false;
   if (!id) { msg.textContent = "That doesn't look like an OLX listing link (it should contain 'iid-' and a number)."; return; }
   if (byId[id]) { msg.hidden = true; sheet(byId[id]); return; }
-  if (!LOCAL) { msg.textContent = "This listing is newer than today's update (or isn't a single monitor). Check back tomorrow."; return; }
+  if (!LOCAL) { msg.textContent = "This listing isn't in the latest update (or isn't a single monitor). Live checks of brand-new links run on the owner's PC, with local Gemma and TabPFN."; return; }
   msg.textContent = "New listing: Gemma is reading it and TabPFN is pricing it (about 10–20 seconds)…";
   try {
     const r = await fetch(`/api/check?recipe=${RECIPE}&url=${encodeURIComponent(url)}`);
