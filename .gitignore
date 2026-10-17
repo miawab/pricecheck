@@ -8,3 +8,7 @@ recipes/*.draft.toml
 .pytest_cache/
 report.xml
 .cache/
+
+# video source, renders and screenshots stay on this PC (large files; friend quotes)
+/media/
+/video/
