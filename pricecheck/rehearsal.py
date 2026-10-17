@@ -9,6 +9,7 @@ after an earlier one has been healed.
     1  results move:        state.algolia.content.hits     -> state.listingSearch.page.items
     2  page data renamed:   window.state = {...}           -> window.__OLX_STATE__ = {...}, results under search.results
     3  listing id renamed:  hit.externalID                 -> hit.adId (results stay where they are)
+    4  title renamed:       hit.title                      -> hit.name
 """
 import json
 import os
@@ -35,7 +36,13 @@ def _id_renamed(state):
     return state, MARKER
 
 
-VARIANTS = {"1": _results_moved, "2": _data_renamed, "3": _id_renamed}
+def _title_renamed(state):
+    for hit in state["algolia"]["content"].get("hits", []):
+        hit["name"] = hit.pop("title")
+    return state, MARKER
+
+
+VARIANTS = {"1": _results_moved, "2": _data_renamed, "3": _id_renamed, "4": _title_renamed}
 
 
 def change_layout(html, variant=None):
