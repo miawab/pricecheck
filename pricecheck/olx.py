@@ -31,14 +31,19 @@ def _fetch(url):
     return html
 
 
+# OLX has put the page data in `window.state = {...}` and (newer) `window.__OLX_STATE__ = {...}`.
+STATE_MARKERS = ("window.state = ", "window.__OLX_STATE__ = ")
+
+
 def _page(url):
-    """The page's data (OLX puts it in a `window.state = {...}` script) and the raw HTML."""
+    """The page's data (OLX puts it in a `window.state = {...}` or `window.__OLX_STATE__ = {...}` script) and the raw HTML."""
     html = _fetch(url)
-    start = html.find("window.state = ")
-    if start < 0:
-        raise LayoutChanged(url, html, "no `window.state` page data")
-    state, _ = json.JSONDecoder().raw_decode(html, start + len("window.state = "))
-    return state, html
+    for marker in STATE_MARKERS:
+        start = html.find(marker)
+        if start >= 0:
+            state, _ = json.JSONDecoder().raw_decode(html, start + len(marker))
+            return state, html
+    raise LayoutChanged(url, html, "no `window.state` page data")
 
 
 def _state(url):
@@ -82,8 +87,9 @@ def _listing(hit):
 
 
 def _search_results(state):
-    """(listings, page count) from a search page's data. OLX has served two layouts:
-    `algolia.content.hits` / `nbPages`, and (newer) `listingSearch.page.items` / `totalPages`.
+    """(listings, page count) from a search page's data. OLX has served three layouts:
+    `algolia.content.hits` / `nbPages`, `listingSearch.page.items` / `totalPages`,
+    and (newest, in `window.__OLX_STATE__`) `search.results` / `pageCount`.
     Raises KeyError/TypeError when the page matches neither."""
     if "algolia" in state:
         content = state["algolia"]["content"]
@@ -91,7 +97,10 @@ def _search_results(state):
     if "listingSearch" in state:
         page = state["listingSearch"]["page"]
         return page["items"], page.get("totalPages")
-    raise KeyError("algolia or listingSearch")
+    if "search" in state:
+        search = state["search"]
+        return search["results"], search.get("pageCount")
+    raise KeyError("algolia, listingSearch or search")
 
 
 def search(path, log=print):
