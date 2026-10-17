@@ -1,9 +1,10 @@
 # Environment for GitLab Duo flows working on this repo (read from the default branch only).
-# The flow sandbox has no internet, so the test tools come from pure-Python wheels kept in
-# .gitlab/duo/wheels (pytest, requests, sentry-sdk). They are unpacked without pip.
+# The flow sandbox has no internet and Python 3.9, so the test tools come from pure-Python wheels kept in
+# .gitlab/duo/wheels (pytest 8 + its 3.9 backports, requests, sentry-sdk, tomli), unpacked without pip.
 # pandas/numpy aren't there, so tests/test_pricing.py is skipped in the sandbox; the pipeline runs it.
+# Nothing here may stop the agent from starting: if a step fails, the agent still runs and relies on the pipeline.
 setup_script:
-  - python3 -c "import glob,zipfile; [zipfile.ZipFile(w).extractall('/tmp/pcdeps') for w in glob.glob('.gitlab/duo/wheels/*.whl')]"
-  - printf '#!/bin/sh\nPYTHONPATH=/tmp/pcdeps exec python3 "$@"\n' > /usr/local/bin/pc-python
-  - chmod +x /usr/local/bin/pc-python
-  - pc-python -m pytest --version
+  - python3 -c "import glob,zipfile; [zipfile.ZipFile(w).extractall('/tmp/pcdeps') for w in glob.glob('.gitlab/duo/wheels/*.whl')]" || true
+  - printf '#!/bin/sh\nPYTHONPATH=/tmp/pcdeps exec python3 "$@"\n' > /usr/local/bin/pc-python || true
+  - chmod +x /usr/local/bin/pc-python || true
+  - pc-python -m pytest --version || echo "pytest unavailable in the sandbox; the pipeline will run the tests"
