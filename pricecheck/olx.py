@@ -74,15 +74,24 @@ def _hit_id(hit):
     raise KeyError("externalID")
 
 
+def _hit_title(hit):
+    """The listing title: `title`, or `name` where OLX renamed it. Raises KeyError when neither is there."""
+    for key in ("title", "name"):
+        if hit.get(key):
+            return hit[key]
+    raise KeyError("title")
+
+
 def _listing(hit):
     listing_id = _hit_id(hit)
+    title = _hit_title(hit)
     extra = hit.get("extraFields") or {}
     loc = {l["level"]: l["name"] for l in hit.get("location", [])}
     cover = (hit.get("coverPhoto") or {}).get("id") or next((p["id"] for p in hit.get("photos") or []), None)
     return {
         "id": str(listing_id),
-        "url": item_url(listing_id, hit["title"]),
-        "title": no_phones(hit["title"]),
+        "url": item_url(listing_id, title),
+        "title": no_phones(title),
         "price": hit.get("price") or extra.get("price"),
         "brand_dropdown": extra.get("brand"),
         "condition_dropdown": extra.get("new_used"),

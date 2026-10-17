@@ -186,3 +186,37 @@ def test_search_reads_adid_layout(fake_olx_adid_search):
     assert first["city"] == "Lahore" and first["area"] == "Gulberg"
     assert first["brand_dropdown"] == "samsung" and first["condition_dropdown"] == "used"
     assert first["featured"] is True
+
+
+@pytest.fixture
+def fake_olx_name_search(monkeypatch):
+    """Serve the layout where hits stay in `algolia.content.hits` but the listing's title is `name` (no `title`)."""
+    requested = []
+
+    def get(url, **_):
+        requested.append(url)
+        return Page((FIXTURES / "search_name_field.html").read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(olx.requests, "get", get)
+    monkeypatch.setattr(olx, "DELAY", 0)
+    return requested
+
+
+def test_search_reads_name_field_layout(fake_olx_name_search):
+    rows = olx.search("https://www.olx.com.pk/computer-components_c708205?filter=type_eq_monitors", log=lambda *_: None)
+    assert len(rows) == 6
+    assert len({r["id"] for r in rows}) == 6
+    for r in rows:
+        assert r["id"].isdigit()
+        assert r["url"].startswith("https://www.olx.com.pk/item/") and r["url"].endswith(f"-iid-{r['id']}")
+        assert r["title"]
+        assert isinstance(r["price"], (int, float)) and r["price"] > 0  # top-level price is 0; real one is in extraFields
+        assert r["city"]
+    first = rows[0]
+    assert first["id"] == "1120313885"
+    assert first["title"] == "Samsung 32 Inch 4K Monitor – Excellent Condition"
+    assert first["url"] == "https://www.olx.com.pk/item/samsung-32-inch-4k-monitor-excellent-condition-iid-1120313885"
+    assert first["price"] == 65000
+    assert first["city"] == "Lahore" and first["area"] == "Gulberg"
+    assert first["brand_dropdown"] == "samsung" and first["condition_dropdown"] == "used"
+    assert first["featured"] is True
