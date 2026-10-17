@@ -86,7 +86,7 @@ def main():
     name, url = re.sub(r"\W+", "_", sys.argv[1].lower()), sys.argv[2]
     print(f"Reading listings from {url} ...")
     path = re.sub(r"^https?://(www\.)?olx\.com\.pk/", "", url.strip())
-    hits = olx._state(f"https://www.olx.com.pk/{path}")["algolia"]["content"]["hits"]
+    hits, _ = olx._search_results(olx._state(f"https://www.olx.com.pk/{path}"))
     listings = [olx._listing(h) for h in hits]
     if not listings:
         sys.exit("No listings found at that link. Copy the address of an OLX category page and try again.")
