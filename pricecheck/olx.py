@@ -65,13 +65,23 @@ def item_url(listing_id, title):
     return f"https://www.olx.com.pk/item/{slug}-iid-{listing_id}"
 
 
+def _hit_id(hit):
+    """The listing id: `externalID`, or `adId` where OLX renamed it. (The hit's plain numeric `id` is an internal
+    key, not the id in the listing's URL.) Raises KeyError when neither is there."""
+    for key in ("externalID", "adId"):
+        if hit.get(key):
+            return hit[key]
+    raise KeyError("externalID")
+
+
 def _listing(hit):
+    listing_id = _hit_id(hit)
     extra = hit.get("extraFields") or {}
     loc = {l["level"]: l["name"] for l in hit.get("location", [])}
     cover = (hit.get("coverPhoto") or {}).get("id") or next((p["id"] for p in hit.get("photos") or []), None)
     return {
-        "id": str(hit["externalID"]),
-        "url": item_url(hit["externalID"], hit["title"]),
+        "id": str(listing_id),
+        "url": item_url(listing_id, hit["title"]),
         "title": no_phones(hit["title"]),
         "price": hit.get("price") or extra.get("price"),
         "brand_dropdown": extra.get("brand"),
@@ -113,14 +123,14 @@ def search(path, log=print):
         state, html = _page(url)
         try:
             hits, page_count = _search_results(state)
-            new = [h for h in hits if str(h["externalID"]) not in seen]
+            new = [h for h in hits if str(_hit_id(h)) not in seen]
             rows = [_listing(h) for h in new]
         except (KeyError, TypeError) as e:
             raise LayoutChanged(url, html, f"search results not where expected (missing {e})") from e
         if not new:
             break
         for h, row in zip(new, rows):
-            seen.add(str(h["externalID"]))
+            seen.add(str(_hit_id(h)))
             out.append(row)
         log(f"  page {page}/{page_count}: {len(out)} listings")
         if page >= (page_count or 0):
@@ -141,7 +151,7 @@ def details(url):
     if "ad" not in state:
         raise LayoutChanged(url, html, "listing data not where expected (missing 'ad')")
     ad = (state.get("ad") or {}).get("data") or state.get("ad") or {}
-    if not ad.get("externalID"):
+    if not (ad.get("externalID") or ad.get("adId")):
         return None  # removed or sold
     try:
         row = _listing(ad)
