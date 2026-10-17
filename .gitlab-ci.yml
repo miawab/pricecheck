@@ -75,21 +75,17 @@ release_heal:
   image: registry.gitlab.com/gitlab-org/cli:latest
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_MESSAGE =~ /Closes #\d+/'
+  # The notes go through a file: commit messages contain backticks, and a message must never run as shell.
   script:
-    - echo "Releasing heal $CI_COMMIT_SHORT_SHA"
+    - |
+      printf '%s\n' "$CI_COMMIT_MESSAGE" > release-notes.md
+      printf '\n---\n- Deployed site package: %s\n- Live site: %s\n- Pipeline: %s\n' "$PACKAGE_URL" "$SITE_URL" "$CI_PIPELINE_URL" >> release-notes.md
+      cat release-notes.md
   release:
     tag_name: heal-$CI_PIPELINE_IID
-    name: "Heal $CI_PIPELINE_IID: $CI_COMMIT_TITLE"
-    description: "$CI_COMMIT_MESSAGE"
+    name: "Heal $CI_PIPELINE_IID"
+    description: ./release-notes.md
     ref: $CI_COMMIT_SHA
-    assets:
-      links:
-        - name: site.tar.gz (what was deployed)
-          url: $PACKAGE_URL
-          link_type: package
-        - name: Live site
-          url: https://pricecheck-gamma.vercel.app
-          link_type: other
 
 # After a deploy, check the live site really serves listings (not just a 200).
 smoke_test:
