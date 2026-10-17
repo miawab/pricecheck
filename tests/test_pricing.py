@@ -1,10 +1,11 @@
 """Bargaining advice, similar listings, the store and recipes: plain code, no Gemma or TabPFN needed."""
-import pandas as pd
 import pytest
 
-from pricecheck import model
-from pricecheck.recipe import Recipe
-from pricecheck.store import Store
+pd = pytest.importorskip("pandas")  # the agent sandbox has no pandas; the pipeline always runs these
+
+from pricecheck import model  # noqa: E402
+from pricecheck.recipe import Recipe  # noqa: E402
+from pricecheck.store import Store  # noqa: E402
 
 
 @pytest.mark.parametrize("price,verdict", [

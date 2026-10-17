@@ -1,4 +1,4 @@
-# pricecheck pipeline: test the OLX reader and pricing code, scan for leaks, deploy the site.
+# pricecheck pipeline: test -> scan -> package -> deploy -> release -> check the live site.
 # Nothing here runs on a timer. Pipelines start from a push or a merge request.
 #
 # CI/CD variables (Settings > CI/CD > Variables, masked):
@@ -7,14 +7,23 @@
 stages:
   - test
   - secure
+  - package
   - deploy
+  - release
+  - monitor
 
 include:
   - template: Jobs/SAST.gitlab-ci.yml
   - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  SITE_URL: https://pricecheck-gamma.vercel.app
+  PACKAGE_URL: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/pricecheck-site/1.0.$CI_PIPELINE_IID/site.tar.gz"
+
+.on_main: &on_main
+  - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 tests:
   stage: test
@@ -36,6 +45,18 @@ sast:
 secret_detection:
   stage: secure
 
+# The site as a versioned package: what gets deployed is also kept, so any release can be redeployed.
+package_site:
+  stage: package
+  image: curlimages/curl:8.10.1
+  rules: *on_main
+  script:
+    - tar -czf site.tar.gz -C site .
+    - 'curl --fail-with-body --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file site.tar.gz "$PACKAGE_URL"'
+  artifacts:
+    paths: [site.tar.gz]
+    expire_in: 30 days
+
 deploy_site:
   stage: deploy
   image: node:22-slim
@@ -47,3 +68,54 @@ deploy_site:
   script:
     - cd site
     - npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
+
+# Every self-heal that reaches main (its commit closes an issue) becomes a GitLab Release.
+release_heal:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_MESSAGE =~ /Closes #\d+/'
+  script:
+    - echo "Releasing heal $CI_COMMIT_SHORT_SHA"
+  release:
+    tag_name: heal-$CI_PIPELINE_IID
+    name: "Heal $CI_PIPELINE_IID: $CI_COMMIT_TITLE"
+    description: "$CI_COMMIT_MESSAGE"
+    ref: $CI_COMMIT_SHA
+    assets:
+      links:
+        - name: site.tar.gz (what was deployed)
+          url: $PACKAGE_URL
+          link_type: package
+        - name: Live site
+          url: https://pricecheck-gamma.vercel.app
+          link_type: other
+
+# After a deploy, check the live site really serves listings (not just a 200).
+smoke_test:
+  stage: monitor
+  image: python:3.12-slim
+  rules: *on_main
+  needs:
+    - job: deploy_site
+      optional: true
+  script:
+    - |
+      python - <<'EOF'
+      import json, os, time, urllib.request
+      site = os.environ["SITE_URL"]
+      def get(path):
+          with urllib.request.urlopen(f"{site}/{path}?ci={time.time()}", timeout=30) as r:
+              return json.load(r)
+      for attempt in range(6):  # give the CDN a moment after a deploy
+          try:
+              index = get("data/index.json")
+              counts = {r["name"]: len(get(f"data/{r['name']}.json")["listings"]) for r in index}
+              break
+          except Exception as e:
+              print(f"not ready yet ({e}); retrying"); time.sleep(10)
+      else:
+          raise SystemExit("live site never served its data")
+      print("live listings per category:", counts)
+      assert counts and all(n > 0 for n in counts.values()), "a category has no listings"
+      EOF

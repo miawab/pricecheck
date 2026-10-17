@@ -123,6 +123,33 @@ invoke_agent pricecheck                ← one "is this price fair?" check
 
 That's how we found that a cold Gemma (not yet loaded into the GPU) takes ~2 minutes on the first check, versus ~5 seconds once it's warm. Only public listing text is sent; no IPs or personal data.
 
+## When OLX changes its site: pricecheck heals itself
+
+Scrapers break whenever a site moves its data around. pricecheck fixes itself on GitLab, with nobody in the loop:
+
+```
+your PC   python -m pricecheck.update monitors      OLX page doesn't match any layout pricecheck knows
+            └─ breakage.py                          saves a trimmed copy (no seller details, no phone numbers)
+               opens a GitLab issue  ─────────┐     "listings moved to window.__OLX_STATE__.search.results[]"
+                                              ▼
+GitLab    flow trigger: issue created → Scraper Medic flow (.gitlab/duo/flows/scraper-medic.yml)
+            ├─ scraper_medic   diagnoses, reproduces with a failing test, fixes olx.py for old AND new
+            │                  layouts, opens a merge request, reads the log and fixes it if the pipeline fails
+            ├─ reviewer        independent check: scope, no weakened tests, old layouts still read,
+            │                  no personal data, pipeline green → APPROVE, or stop and ask a human
+            └─ shipper         fast-forwards main, reports back on the issue
+          main pipeline (.gitlab-ci.yml)
+            test → SAST, secret + dependency scanning → package the site → deploy → release → smoke-test the live site
+your PC   git pull, run again: it reads OLX again
+```
+
+Nothing runs on a timer: the loop starts only when you run pricecheck and it finds OLX changed.
+
+**Rehearse it.** OLX can't be asked to redesign on cue, so `PRICECHECK_REHEARSE_OLX_CHANGE=<1|2|3>` rewrites the real
+pages the way a redesign might (results moved, page data renamed, listing id renamed); see `pricecheck/rehearsal.py`.
+To open issues automatically, put `GITLAB_TOKEN` (a personal access token with the `api` scope) and `GITLAB_PROJECT`
+in `.env`.
+
 ## What it can't do
 
 - It only sees **asking prices**, never what people actually paid. Removed listings are an estimate of sold prices, not proof.
